@@ -12,6 +12,7 @@ import { createEnemies } from '../game/enemies.js';
 import { SpawnDirector } from '../game/spawnDirector.js';
 import { createBattleshipSystem } from '../game/battleship.js';
 import { createAudio } from '../game/audio.js';
+import { createVfxPool } from '../game/vfxPool.js';
 
 export class GameScene extends Phaser.Scene {
   constructor() {
@@ -50,6 +51,15 @@ export class GameScene extends Phaser.Scene {
     this.enemySystem = createEnemies(this);
     this.spawnDirector = new SpawnDirector();
     this.audio = createAudio(this);
+    this.vfxPool = createVfxPool(this, {
+      caps: {
+        pf_smoke: 70,
+        pf_spark: 40,
+        pf_flak_burst: 45,
+        pf_splash: 30,
+        pf_ripple: 30
+      }
+    });
 
     this.segmentSystem = new SegmentSystem(this, {
       player: this.player,
@@ -254,7 +264,8 @@ export class GameScene extends Phaser.Scene {
       if (time < b._nextTrailAt) return;
       b._nextTrailAt = time + 70;
 
-      const puff = this.add.image(b.x, b.y, 'pf_smoke');
+      const puff = this.vfxPool.acquire('pf_smoke');
+      puff.setPosition(b.x, b.y);
       puff.setDepth(1);
       puff.setAlpha(0.12);
       puff.setScale(0.22 + Math.random() * 0.14);
@@ -264,7 +275,7 @@ export class GameScene extends Phaser.Scene {
         alpha: 0,
         scale: puff.scaleX * 1.7,
         duration: 380,
-        onComplete: () => puff.destroy()
+        onComplete: () => this.vfxPool.release(puff)
       });
 
       if (Math.random() < 0.18) this._spawnFlakBurst(b.x, b.y);
@@ -351,7 +362,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   _spawnSpark(x, y) {
-    const s = this.add.image(x, y, 'pf_spark');
+    const s = this.vfxPool.acquire('pf_spark');
+    s.setPosition(x, y);
     s.setDepth(50);
     s.setAlpha(0.8);
     s.setScale(0.45 + Math.random() * 0.25);
@@ -362,13 +374,14 @@ export class GameScene extends Phaser.Scene {
       alpha: 0,
       scale: s.scaleX * 1.6,
       duration: 120,
-      onComplete: () => s.destroy()
+      onComplete: () => this.vfxPool.release(s)
     });
   }
 
   _spawnFlakBurst(x, y) {
     this.audio?.playFlak?.();
-    const p = this.add.image(x, y, 'pf_flak_burst');
+    const p = this.vfxPool.acquire('pf_flak_burst');
+    p.setPosition(x, y);
     p.setDepth(49);
     p.setAlpha(0.7);
     p.setScale(0.55);
@@ -378,7 +391,7 @@ export class GameScene extends Phaser.Scene {
       scale: 1.1,
       duration: 220,
       ease: 'Quad.easeOut',
-      onComplete: () => p.destroy()
+      onComplete: () => this.vfxPool.release(p)
     });
   }
 
@@ -428,12 +441,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   _spawnWaterSplash(x, y) {
-    const splash = this.add.image(x, y - 10, 'pf_splash');
+    const splash = this.vfxPool.acquire('pf_splash');
+    splash.setPosition(x, y - 10);
     splash.setDepth(-6);
     splash.setAlpha(0.55);
     splash.setScale(0.65);
 
-    const ripple = this.add.image(x, y + 2, 'pf_ripple');
+    const ripple = this.vfxPool.acquire('pf_ripple');
+    ripple.setPosition(x, y + 2);
     ripple.setDepth(-6);
     ripple.setAlpha(0.22);
     ripple.setScale(0.55);
@@ -445,7 +460,7 @@ export class GameScene extends Phaser.Scene {
       scale: splash.scaleX * 1.15,
       duration: 380,
       ease: 'Quad.easeOut',
-      onComplete: () => splash.destroy()
+      onComplete: () => this.vfxPool.release(splash)
     });
 
     this.tweens.add({
@@ -454,7 +469,7 @@ export class GameScene extends Phaser.Scene {
       scale: 1.35,
       duration: 520,
       ease: 'Quad.easeOut',
-      onComplete: () => ripple.destroy()
+      onComplete: () => this.vfxPool.release(ripple)
     });
   }
 
