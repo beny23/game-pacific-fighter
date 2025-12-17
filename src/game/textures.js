@@ -390,6 +390,30 @@ export function ensureTextures(scene) {
     g.generateTexture('pf_battleship', 280, 56);
   }
 
+  // Small boat (ocean convoy target)
+  if (!scene.textures.exists('pf_boat')) {
+    g.clear();
+    // hull
+    g.fillStyle(0x1a2a38, 1);
+    g.fillRoundedRect(6, 10, 84, 12, 5);
+    g.fillTriangle(90, 10, 90, 22, 102, 16);
+    g.fillTriangle(6, 10, 0, 14, 6, 22);
+    // deck
+    g.fillStyle(0x2a3e52, 1);
+    g.fillRoundedRect(18, 6, 54, 10, 5);
+    // tiny bridge
+    g.fillStyle(0x344a60, 1);
+    g.fillRoundedRect(50, 2, 14, 8, 3);
+    g.fillStyle(0xe7f9ff, 0.12);
+    g.fillRect(53, 6, 6, 1);
+    // outline
+    g.lineStyle(2, 0xffffff, 0.06);
+    g.strokeRoundedRect(18, 6, 54, 10, 5);
+    g.lineStyle(2, 0xffffff, 0.05);
+    g.strokeRoundedRect(6, 10, 84, 12, 5);
+    g.generateTexture('pf_boat', 104, 26);
+  }
+
   // Ocean tile (for scrolling waves)
   if (!scene.textures.exists('pf_ocean_tile')) {
     g.clear();

@@ -13,6 +13,7 @@ import { SpawnDirector } from '../game/spawnDirector.js';
 import { createBattleshipSystem } from '../game/battleship.js';
 import { createAudio } from '../game/audio.js';
 import { createVfxPool } from '../game/vfxPool.js';
+import { createConvoySystem } from '../game/convoy.js';
 
 export class GameScene extends Phaser.Scene {
   constructor() {
@@ -33,11 +34,20 @@ export class GameScene extends Phaser.Scene {
     this.oceanLineY = this.H - 26;
     this.environment = createEnvironment(this, { oceanLineY: this.oceanLineY });
 
-    this.hud = createHud(this);
+    this.paused = false;
+    this.muted = localStorage.getItem('pf_muted') === '1';
+
+    this.hud = createHud(this, {
+      onTogglePause: () => this._togglePause(),
+      onToggleMute: () => this._toggleMute()
+    });
     this.hud.setHelp('W/S or Up/Down: altitude  |  Space: cannon  |  B: bomb');
+    this.hud.setPaused(false);
+    this.hud.setMuted(this.muted);
 
     // Static bodies avoid subtle physics drift when we manually scroll set-pieces.
     this.groundTargets = this.physics.add.staticGroup();
+    this.oceanTargets = this.physics.add.staticGroup();
 
     this.groundProxy = getOrCreateGroundProxy(this, {
       width: this.W,
@@ -51,13 +61,16 @@ export class GameScene extends Phaser.Scene {
     this.enemySystem = createEnemies(this);
     this.spawnDirector = new SpawnDirector();
     this.audio = createAudio(this);
+    this.audio.setEnabled(!this.muted);
+
+    const isMobile = !!(this.sys.game.device.os.android || this.sys.game.device.os.iOS);
     this.vfxPool = createVfxPool(this, {
       caps: {
-        pf_smoke: 70,
-        pf_spark: 40,
-        pf_flak_burst: 45,
-        pf_splash: 30,
-        pf_ripple: 30
+        pf_smoke: isMobile ? 45 : 70,
+        pf_spark: isMobile ? 28 : 40,
+        pf_flak_burst: isMobile ? 32 : 45,
+        pf_splash: isMobile ? 20 : 30,
+        pf_ripple: isMobile ? 20 : 30
       }
     });
 
@@ -71,8 +84,13 @@ export class GameScene extends Phaser.Scene {
     this.segmentSystem.init(this.time.now);
 
     this.battleshipSystem = createBattleshipSystem(this, { oceanLineY: this.oceanLineY });
+    this.convoySystem = createConvoySystem(this, { oceanLineY: this.oceanLineY, oceanTargets: this.oceanTargets });
     this._battleshipBombOverlap = null;
     this._battleshipBulletOverlap = null;
+
+    this._nextNearMissAt = 0;
+
+    this._showTutorialIfNeeded();
 
     this._wireCollisions();
 
@@ -83,6 +101,8 @@ export class GameScene extends Phaser.Scene {
 
   update(time, delta) {
     const dt = delta / 1000;
+
+    if (this.paused) return;
 
     if (this.playerSystem.state.dead) {
       if (!this.gameOverShown) this._gameOver();
@@ -106,6 +126,13 @@ export class GameScene extends Phaser.Scene {
       player: this.player,
       enemyBullets: this.weapons.enemyBullets,
       spawnFlak: (x, y, ctx) => this.enemySystem.spawnFlak(x, y, ctx)
+    });
+
+    this.convoySystem.update(time, dt, {
+      segment: this.segmentSystem.segment,
+      difficulty,
+      worldSpeed: this.worldSpeed,
+      width: this.W
     });
 
     // Late-bind overlaps because the battleship spawns/despawns dynamically.
@@ -217,6 +244,48 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  _togglePause() {
+    this.paused = !this.paused;
+    this.hud.setPaused(this.paused);
+    if (this.paused) {
+      this.physics.world.pause();
+      this.audio?.stopEngine?.();
+      this.hud.setHelp('PAUSED');
+    } else {
+      this.physics.world.resume();
+      this.hud.setHelp('');
+    }
+  }
+
+  _toggleMute() {
+    this.muted = !this.muted;
+    localStorage.setItem('pf_muted', this.muted ? '1' : '0');
+    this.audio?.setEnabled?.(!this.muted);
+    this.hud.setMuted(this.muted);
+  }
+
+  _showTutorialIfNeeded() {
+    const seen = localStorage.getItem('pf_seen_tutorial') === '1';
+    if (seen) return;
+
+    const isTouch = !!this.sys.game.device.input.touch;
+    const text = isTouch
+      ? 'HOW TO PLAY\n\nSwipe up/down: altitude\nTap: fire\nLong-press: bomb\n\nTap to start'
+      : 'HOW TO PLAY\n\nW/S or Up/Down: altitude\nSpace: fire\nB: bomb\n\nClick to start';
+
+    this.hud.showTutorial(text);
+
+    const dismiss = () => {
+      this.hud.hideTutorial();
+      localStorage.setItem('pf_seen_tutorial', '1');
+      this.input.off('pointerdown', dismiss);
+      this.input.keyboard?.off('keydown', dismiss);
+    };
+
+    this.input.on('pointerdown', dismiss);
+    this.input.keyboard?.on('keydown', dismiss);
+  }
+
   _onBattleshipHit(projectile, ship, { isBomb }) {
     if (!this.battleshipSystem.sprite) return;
     if (!ship || ship !== this.battleshipSystem.sprite) return;
@@ -258,6 +327,16 @@ export class GameScene extends Phaser.Scene {
     // Flak trail + occasional mini-bursts along its flight.
     this.weapons.enemyBullets.children.iterate((b) => {
       if (!b || !b.active) return;
+
+      // Near-miss micro shake (light polish). Throttled.
+      if (this.player?.active && time >= (this._nextNearMissAt || 0)) {
+        const d = Phaser.Math.Distance.Between(b.x, b.y, this.player.x, this.player.y);
+        if (d < 28) {
+          this._nextNearMissAt = time + 180;
+          this.cameras.main.shake(35, 0.0012);
+        }
+      }
+
       if (b.texture?.key !== 'pf_flak') return;
 
       if (!b._nextTrailAt) b._nextTrailAt = time + 60;
@@ -358,6 +437,25 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.overlap(this.weapons.playerBullets, this.groundTargets, (bullet, target) => {
       bullet.destroy();
       this._damageGroundTarget(target, 6);
+    });
+
+    // Bombs vs ocean targets (convoy)
+    this.physics.add.overlap(this.weapons.bombs, this.oceanTargets, (bomb, target) => {
+      this._spawnExplosion(target.x, target.y);
+      bomb.destroy();
+      target.destroy();
+      this.score += 90;
+    });
+
+    // Bullets vs ocean targets (chip)
+    this.physics.add.overlap(this.weapons.playerBullets, this.oceanTargets, (bullet, target) => {
+      bullet.destroy();
+      const killed = this.convoySystem.damage(target, 6);
+      this._spawnSpark(target.x, target.y);
+      if (killed) {
+        this.score += 90;
+        this._spawnExplosion(target.x, target.y);
+      }
     });
   }
 

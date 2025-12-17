@@ -32,6 +32,17 @@ export function createAudio(scene) {
     return true;
   }
 
+  function setEnabled(enabled) {
+    state.enabled = !!enabled;
+    if (!state.enabled) {
+      stopEngine();
+    }
+  }
+
+  function isEnabled() {
+    return !!state.enabled;
+  }
+
   async function unlock() {
     if (!ensure()) return;
     if (state.unlocked) return;
@@ -174,6 +185,10 @@ export function createAudio(scene) {
   }
 
   function updateEngine({ vy = 0, landing = false, hpPct = 1 }) {
+    if (!state.enabled) {
+      stopEngine();
+      return;
+    }
     if (!state.unlocked) return;
     startEngine();
 
@@ -228,6 +243,8 @@ export function createAudio(scene) {
 
   return {
     unlock,
+    setEnabled,
+    isEnabled,
     updateEngine,
     stopEngine,
     playGun,

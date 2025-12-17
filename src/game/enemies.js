@@ -46,6 +46,15 @@ export function createEnemies(scene) {
     enemy.nextShotAt = timeNow + 500 + Math.random() * 600;
     enemy.shotEveryMs = Math.max(900, 1400 - difficulty * 40);
 
+    // Occasional ace fighter for variety.
+    const aceChance = Math.min(0.22, 0.10 + difficulty * 0.01);
+    enemy.isAce = Math.random() < aceChance;
+    if (enemy.isAce) {
+      enemy.hp += 18;
+      enemy.shotEveryMs = Math.max(720, enemy.shotEveryMs - 140);
+      enemy.setTint(0xe7f9ff);
+    }
+
   }
 
   function damageEnemy(enemy, amount, { onKilled }) {
