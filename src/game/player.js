@@ -35,6 +35,7 @@ export class PlayerSystem {
 
     this.pointerControl = {
       activeId: null,
+      activeWasTouch: false,
       startY: 0,
       startPlayerY: 0,
       dragging: false,
@@ -108,6 +109,7 @@ export class PlayerSystem {
       }
 
       this.pointerControl.activeId = pointer.id;
+      this.pointerControl.activeWasTouch = !!pointer?.wasTouch;
       this.pointerControl.startY = this._pointerGameY(pointer);
       this.pointerControl.startPlayerY = this.sprite?.y ?? 0;
       this.pointerControl.dragging = false;
@@ -118,8 +120,8 @@ export class PlayerSystem {
 
     this._onPointerMove = (pointer) => {
       if (this.pointerControl.activeId !== pointer.id) return;
-      if (!pointer?.wasTouch) return;
 
+      // Touch: swipe to steer. Mouse: click-drag to steer.
       const currentY = this._pointerGameY(pointer);
       const dy = currentY - this.pointerControl.startY;
       this.pointerControl.moved = Math.max(this.pointerControl.moved, Math.abs(dy));
@@ -148,6 +150,7 @@ export class PlayerSystem {
       }
 
       this.pointerControl.activeId = null;
+      this.pointerControl.activeWasTouch = false;
       this.pointerControl.dragging = false;
       this.pointerControl.swipeTargetY = null;
       this.pointerControl.ignoreTap = false;
@@ -200,9 +203,10 @@ export class PlayerSystem {
     // 2) Keyboard (desktop)
     // 3) Mouse cursor Y steering (desktop "cursor method")
     const pointer = this.scene.input.activePointer;
-    const wantsTouchSwipe = !!this.pointerControl.dragging;
+    const wantsSwipeControl = !!this.pointerControl.dragging;
 
-    if (wantsTouchSwipe && this.pointerControl.swipeTargetY != null) {
+    // Swipe control can come from touch drag or mouse click-drag.
+    if (wantsSwipeControl && this.pointerControl.swipeTargetY != null) {
       const targetY = clamp(
         this.pointerControl.swipeTargetY,
         TUNING.PLAYER.MIN_Y,
@@ -213,17 +217,6 @@ export class PlayerSystem {
       this.sprite.setVelocityY(vy);
     } else if (vyKeys !== 0) {
       this.sprite.setVelocityY(vyKeys * TUNING.PLAYER.Y_SPEED);
-    } else if (this.scene.input?.mousePointer) {
-      // Cursor method: move toward cursor Y with a springy feel.
-      const mouseY = this._pointerGameY(this.scene.input.mousePointer);
-      const targetY = clamp(
-        mouseY,
-        TUNING.PLAYER.MIN_Y,
-        this.scene.scale.height - TUNING.PLAYER.MIN_Y
-      );
-      const dy = targetY - this.sprite.y;
-      const vy = Phaser.Math.Clamp(dy * 7, -TUNING.PLAYER.Y_SPEED, TUNING.PLAYER.Y_SPEED);
-      this.sprite.setVelocityY(vy);
     } else {
       this.sprite.setVelocityY(0);
     }
