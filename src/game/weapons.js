@@ -24,7 +24,7 @@ export function createWeapons(scene) {
   }
 
   function tryFireCannon(time, { player, playerState }) {
-    if (time - playerState.lastCannonAt < playerState.cannonCooldownMs) return;
+    if (time - playerState.lastCannonAt < playerState.cannonCooldownMs) return false;
     playerState.lastCannonAt = time;
 
     spawnMuzzleFlash(player.x + 32, player.y + (Math.random() - 0.5) * 2);
@@ -35,11 +35,13 @@ export function createWeapons(scene) {
     bullet.setBlendMode(Phaser.BlendModes.ADD);
     bullet.setScale(0.75);
     bullet.damage = 10;
+
+    return true;
   }
 
   function tryDropBomb(time, { player, playerState }) {
-    if (time - playerState.lastBombAt < playerState.bombCooldownMs) return;
-    if (playerState.bombs <= 0) return;
+    if (time - playerState.lastBombAt < playerState.bombCooldownMs) return false;
+    if (playerState.bombs <= 0) return false;
 
     playerState.lastBombAt = time;
     playerState.bombs -= 1;
@@ -50,6 +52,8 @@ export function createWeapons(scene) {
     bomb.body.setGravityY(TUNING.WEAPONS.BOMB_GRAVITY_Y);
     bomb.setVelocityX(TUNING.WEAPONS.BOMB_VELOCITY_X);
     bomb.damage = 60;
+
+    return true;
   }
 
   function explodeBomb(x, y, { enemies, groundTargets, onDamageEnemy, onDamageGroundTarget }) {

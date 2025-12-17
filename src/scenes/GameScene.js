@@ -11,6 +11,7 @@ import { createWeapons } from '../game/weapons.js';
 import { createEnemies } from '../game/enemies.js';
 import { SpawnDirector } from '../game/spawnDirector.js';
 import { createBattleshipSystem } from '../game/battleship.js';
+import { createAudio } from '../game/audio.js';
 
 export class GameScene extends Phaser.Scene {
   constructor() {
@@ -48,6 +49,7 @@ export class GameScene extends Phaser.Scene {
     this.weapons = createWeapons(this);
     this.enemySystem = createEnemies(this);
     this.spawnDirector = new SpawnDirector();
+    this.audio = createAudio(this);
 
     this.segmentSystem = new SegmentSystem(this, {
       player: this.player,
@@ -137,11 +139,22 @@ export class GameScene extends Phaser.Scene {
       landingZone: this.segmentSystem.getLandingZone(),
       canLand: this.segmentSystem.segment === SEGMENT.CARRIER_RETURN,
       onLand: () => this._landAndRepair(),
-      onFireCannon: (t) =>
-        this.weapons.tryFireCannon(t, { player: this.player, playerState: this.playerSystem.state }),
-      onDropBomb: (t) =>
-        this.weapons.tryDropBomb(t, { player: this.player, playerState: this.playerSystem.state }),
+      onFireCannon: (t) => {
+        const fired = this.weapons.tryFireCannon(t, { player: this.player, playerState: this.playerSystem.state });
+        if (fired) this.audio?.playGun?.();
+      },
+      onDropBomb: (t) => {
+        const dropped = this.weapons.tryDropBomb(t, { player: this.player, playerState: this.playerSystem.state });
+        if (dropped) this.audio?.playBombDrop?.();
+      },
       onWaterDamage: (amt) => this.playerSystem.damage(amt)
+    });
+
+    // Engine loop follows vertical movement and damage.
+    this.audio?.updateEngine?.({
+      vy: this.player?.body?.velocity?.y ?? 0,
+      landing: !!this.playerSystem.state.landing,
+      hpPct: this.playerSystem.state.maxHealth > 0 ? this.playerSystem.state.health / this.playerSystem.state.maxHealth : 1
     });
 
     this.spawnDirector.update(time, {
@@ -354,6 +367,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   _spawnFlakBurst(x, y) {
+    this.audio?.playFlak?.();
     const p = this.add.image(x, y, 'pf_flak_burst');
     p.setDepth(49);
     p.setAlpha(0.7);
@@ -369,6 +383,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   _spawnExplosion(x, y) {
+    this.audio?.playExplosion?.(false);
     this._flash(0.05, 110);
     this.cameras.main.shake(70, 0.002);
 
@@ -480,6 +495,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   _spawnBigExplosion(x, y) {
+    this.audio?.playExplosion?.(true);
     this._flash(0.10, 140);
     this.cameras.main.shake(140, 0.006);
 
