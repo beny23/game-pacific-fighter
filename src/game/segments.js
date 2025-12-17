@@ -258,8 +258,8 @@ export class SegmentSystem {
       turret.hp = 22;
       turret.isPrimary = false;
       turret.isTurret = true;
-      turret.fireEveryMs = 1550;
-      turret.fireChance = 0.7;
+      turret.fireEveryMs = Math.max(900, 1550 - this.difficulty * 70);
+      turret.fireChance = Math.min(0.86, 0.7 + this.difficulty * 0.03);
       turret.nextFireAt = this.scene.time.now + 400 + i * 150;
     }
 

@@ -79,11 +79,16 @@ export class GameScene extends Phaser.Scene {
 
     this.segmentSystem.update(time);
 
+    // Gentle endless-mode ramp: every ~5k score increases difficulty by 1.
+    const rampDifficulty = Math.floor(this.score / 5000);
+    const difficulty = this.segmentSystem.difficulty + rampDifficulty;
+
     this.environment.update(dt, { worldSpeed: this.worldSpeed });
     this.segmentSystem.updateSetPieces(dt, this.worldSpeed);
 
     this.battleshipSystem.update(time, dt, {
       segment: this.segmentSystem.segment,
+      difficulty,
       worldSpeed: this.worldSpeed,
       width: this.W,
       player: this.player,
@@ -141,7 +146,7 @@ export class GameScene extends Phaser.Scene {
 
     this.spawnDirector.update(time, {
       segment: this.segmentSystem.segment,
-      difficulty: this.segmentSystem.difficulty,
+      difficulty,
       worldSpeed: this.worldSpeed,
       width: this.W,
       height: this.H,
@@ -154,7 +159,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.enemySystem.updateEnemies(time, {
-      difficulty: this.segmentSystem.difficulty,
+      difficulty,
       player: this.player,
       enemyBullets: this.weapons.enemyBullets
     });

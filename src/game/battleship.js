@@ -49,7 +49,7 @@ export function createBattleshipSystem(scene, { oceanLineY }) {
     }
   }
 
-  function update(time, dt, { segment, worldSpeed, width, player, enemyBullets, spawnFlak }) {
+  function update(time, dt, { segment, difficulty = 0, worldSpeed, width, player, enemyBullets, spawnFlak }) {
     // Only show in ocean segment.
     if (segment !== 'OCEAN') {
       if (state.sprite) destroy();
@@ -91,7 +91,7 @@ export function createBattleshipSystem(scene, { oceanLineY }) {
         const t = state.turrets[Math.floor(Math.random() * state.turrets.length)];
         const x = state.sprite.x + t.x;
         const y = state.sprite.y + t.y;
-        spawnFlak?.(x, y, { difficulty: 1, worldSpeed, player, enemyBullets });
+        spawnFlak?.(x, y, { difficulty, worldSpeed, player, enemyBullets });
       }
     }
 
