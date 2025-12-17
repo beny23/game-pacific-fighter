@@ -50,6 +50,14 @@ export class PlayerSystem {
     this._onPointerUp = null;
   }
 
+  _pointerGameY(pointer) {
+    const cam = this.scene.cameras?.main;
+    if (pointer && cam && typeof pointer.positionToCamera === 'function') {
+      return pointer.positionToCamera(cam).y;
+    }
+    return pointer?.y ?? 0;
+  }
+
   create() {
     const { width, height } = this.scene.scale;
     this.sprite = this.scene.physics.add.sprite(
@@ -93,14 +101,14 @@ export class PlayerSystem {
 
       // Two-finger tap to drop bomb (touch only).
       const touches = pointer?.event?.touches;
-      if (pointer.pointerType === 'touch' && touches && touches.length >= 2) {
+      if (pointer?.wasTouch && touches && touches.length >= 2) {
         this._callbacks.onDropBomb?.(now);
         this.pointerControl.ignoreTap = true;
         return;
       }
 
       this.pointerControl.activeId = pointer.id;
-      this.pointerControl.startY = pointer.y;
+      this.pointerControl.startY = this._pointerGameY(pointer);
       this.pointerControl.startPlayerY = this.sprite?.y ?? 0;
       this.pointerControl.dragging = false;
       this.pointerControl.moved = 0;
@@ -110,9 +118,10 @@ export class PlayerSystem {
 
     this._onPointerMove = (pointer) => {
       if (this.pointerControl.activeId !== pointer.id) return;
-      if (pointer.pointerType !== 'touch') return;
+      if (!pointer?.wasTouch) return;
 
-      const dy = pointer.y - this.pointerControl.startY;
+      const currentY = this._pointerGameY(pointer);
+      const dy = currentY - this.pointerControl.startY;
       this.pointerControl.moved = Math.max(this.pointerControl.moved, Math.abs(dy));
       if (!this.pointerControl.dragging && this.pointerControl.moved > this.pointerControl.tapMaxMove) {
         this.pointerControl.dragging = true;
@@ -191,7 +200,7 @@ export class PlayerSystem {
     // 2) Keyboard (desktop)
     // 3) Mouse cursor Y steering (desktop "cursor method")
     const pointer = this.scene.input.activePointer;
-    const wantsTouchSwipe = pointer?.pointerType === 'touch' && this.pointerControl.dragging;
+    const wantsTouchSwipe = !!this.pointerControl.dragging;
 
     if (wantsTouchSwipe && this.pointerControl.swipeTargetY != null) {
       const targetY = clamp(
@@ -204,10 +213,11 @@ export class PlayerSystem {
       this.sprite.setVelocityY(vy);
     } else if (vyKeys !== 0) {
       this.sprite.setVelocityY(vyKeys * TUNING.PLAYER.Y_SPEED);
-    } else if (pointer?.pointerType === 'mouse') {
+    } else if (this.scene.input?.mousePointer) {
       // Cursor method: move toward cursor Y with a springy feel.
+      const mouseY = this._pointerGameY(this.scene.input.mousePointer);
       const targetY = clamp(
-        pointer.y,
+        mouseY,
         TUNING.PLAYER.MIN_Y,
         this.scene.scale.height - TUNING.PLAYER.MIN_Y
       );
