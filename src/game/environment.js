@@ -23,6 +23,10 @@ export function createEnvironment(scene, { oceanLineY }) {
   oceanCrest.setAlpha(0.25);
   oceanCrest.setDepth(-9);
 
+  const oceanFoam = scene.add.tileSprite(W / 2, oceanLineY + 34, W, 56, 'pf_wave_crest');
+  oceanFoam.setAlpha(0.12);
+  oceanFoam.setDepth(-9);
+
   const whitecaps = [];
   let nextWhitecapAt = 0;
 
@@ -49,6 +53,12 @@ export function createEnvironment(scene, { oceanLineY }) {
     vignette.fillRect(W - (i + 1) * t, 0, t, H); // right
   }
 
+  // Film grain overlay (very subtle). TileSprite so it stays cheap.
+  const grain = scene.add.tileSprite(W / 2, H / 2, W, H, 'pf_grain');
+  grain.setDepth(96);
+  grain.setScrollFactor(0);
+  grain.setAlpha(0.08);
+
   function update(dt, { worldSpeed }) {
     // Scroll water.
     sky.tilePositionX += worldSpeed * dt * 0.08;
@@ -58,6 +68,15 @@ export function createEnvironment(scene, { oceanLineY }) {
     oceanCrest.tilePositionX += worldSpeed * dt * 1.6;
     oceanCrest.tilePositionY = Math.sin(scene.time.now / 380) * 2;
     oceanCrest.setAlpha(0.18 + (Math.sin(scene.time.now / 520) * 0.05));
+
+    oceanFoam.tilePositionX += worldSpeed * dt * 2.05;
+    oceanFoam.tilePositionY = Math.sin(scene.time.now / 310) * 2.5;
+    oceanFoam.setAlpha(0.10 + (Math.sin(scene.time.now / 610) * 0.04));
+
+    // Slight drift to avoid visible tiling.
+    grain.tilePositionX += dt * 6;
+    grain.tilePositionY += dt * 3;
+    grain.rotation = Math.sin(scene.time.now / 2200) * 0.002;
 
     // Occasional small whitecaps to sell motion.
     if (scene.time.now >= nextWhitecapAt) {
@@ -108,5 +127,5 @@ export function createEnvironment(scene, { oceanLineY }) {
     }
   }
 
-  return { sky, oceanBase, oceanBack, oceanFront, oceanCrest, horizon, haze, vignette, update };
+  return { sky, oceanBase, oceanBack, oceanFront, oceanCrest, oceanFoam, horizon, haze, vignette, grain, update };
 }

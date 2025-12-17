@@ -3,6 +3,7 @@ import { TUNING } from './constants.js';
 export function createBattleshipSystem(scene, { oceanLineY }) {
   const state = {
     sprite: null,
+    wake: null,
     hp: 0,
     maxHp: 0,
     active: false,
@@ -25,6 +26,11 @@ export function createBattleshipSystem(scene, { oceanLineY }) {
   function spawn({ width, timeNow }) {
     destroy();
 
+    state.wake = scene.add.image(width + 210, oceanLineY + 12, 'pf_ship_wake_big');
+    state.wake.setDepth(-3);
+    state.wake.setAlpha(0.65);
+    state.wake.setScale(0.85, 0.75);
+
     state.sprite = scene.add.image(width + 220, oceanLineY - 6, 'pf_battleship');
     state.sprite.setDepth(-2);
     state.sprite.setAlpha(0.98);
@@ -43,6 +49,10 @@ export function createBattleshipSystem(scene, { oceanLineY }) {
 
   function destroy() {
     state.active = false;
+    if (state.wake) {
+      state.wake.destroy();
+      state.wake = null;
+    }
     if (state.sprite) {
       state.sprite.destroy();
       state.sprite = null;
@@ -74,6 +84,11 @@ export function createBattleshipSystem(scene, { oceanLineY }) {
 
     // Scroll with the world.
     state.sprite.x -= worldSpeed * dt;
+    if (state.wake) {
+      state.wake.x = state.sprite.x + 36;
+      state.wake.y = state.sprite.y + 20;
+      state.wake.alpha = 0.55 + 0.12 * Math.sin(time * 0.004);
+    }
     // Static bodies need a refresh when their GameObject moves.
     if (state.sprite.body?.updateFromGameObject) state.sprite.body.updateFromGameObject();
     else if (state.sprite.body?.refreshBody) state.sprite.body.refreshBody();

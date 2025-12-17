@@ -3,6 +3,7 @@ import { SEGMENT, TUNING } from './constants.js';
 export class SpawnDirector {
   constructor() {
     this.nextFighterAt = 0;
+    this.nextBomberAt = 0;
   }
 
   update(time, {
@@ -16,6 +17,7 @@ export class SpawnDirector {
     player,
     enemyBullets,
     spawnFighter,
+    spawnBomber,
     spawnFlak
   }) {
     // Easier pacing: fewer fighters, slower ramp.
@@ -27,6 +29,30 @@ export class SpawnDirector {
     if (time >= this.nextFighterAt && segment !== SEGMENT.LAUNCH) {
       this.nextFighterAt = time + every;
       spawnFighter({ difficulty, width, height, timeNow: time });
+    }
+
+    // Bombers: same direction as the player (visually face right) but slower,
+    // so they drift left as the player overtakes them.
+    const allowBombers = segment === SEGMENT.OCEAN || segment === SEGMENT.CARRIER_RETURN;
+    if (allowBombers && typeof spawnBomber === 'function') {
+      const bomberBaseEvery = 9800;
+      const bomberEvery = Math.max(5200, bomberBaseEvery - difficulty * 240);
+
+      if (!this.nextBomberAt) this.nextBomberAt = time + 4200;
+
+      if (time >= this.nextBomberAt) {
+        let bomberCount = 0;
+        enemies?.children?.iterate?.((e) => {
+          if (e?.isBomber) bomberCount += 1;
+        });
+
+        // Keep bombers as a rare, readable threat.
+        if (bomberCount < 1) {
+          spawnBomber({ difficulty, width, height, timeNow: time, worldSpeed });
+        }
+
+        this.nextBomberAt = time + bomberEvery;
+      }
     }
 
     groundTargets.children.iterate((t) => {

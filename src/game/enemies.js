@@ -1,3 +1,5 @@
+import Phaser from 'phaser';
+
 export function createEnemies(scene) {
   const enemies = scene.physics.add.group({ allowGravity: false });
 
@@ -6,6 +8,10 @@ export function createEnemies(scene) {
     if (enemy._prop) {
       enemy._prop.destroy();
       enemy._prop = null;
+    }
+    if (Array.isArray(enemy._props)) {
+      for (const p of enemy._props) p?.destroy?.();
+      enemy._props = null;
     }
     if (enemy._shadow) {
       enemy._shadow.destroy();
@@ -57,6 +63,45 @@ export function createEnemies(scene) {
 
   }
 
+  function spawnBomber({ difficulty, width, height, timeNow }) {
+    // Bombers fly the same direction as the player (facing right), but slower.
+    // Relative to the player, they drift left (you overtake them).
+    const y = 80 + Math.random() * (height - 240);
+    const bomber = enemies.create(width + 120, y, 'pf_bomber');
+    bomber.setScale(0.92);
+    bomber.body.setAllowGravity(false);
+
+    // Slow left drift.
+    bomber.setVelocityX(-(70 + difficulty * 2));
+    bomber.setFlipX(false);
+    bomber.setDepth(3);
+
+    // Visual-only shadow.
+    const shadow = scene.add.image(bomber.x, scene.scale.height - 10, 'pf_shadow');
+    shadow.setDepth(bomber.depth - 3);
+    shadow.setAlpha(0.0);
+    shadow.setScale(1.15);
+    bomber._shadow = shadow;
+
+    // Two propeller sprites (visual only).
+    const p1 = scene.add.image(bomber.x, bomber.y, 'pf_prop');
+    const p2 = scene.add.image(bomber.x, bomber.y, 'pf_prop');
+    for (const p of [p1, p2]) {
+      p.setAlpha(0.65);
+      p.setScale(0.72);
+      p.setDepth(bomber.depth + 1);
+    }
+    bomber._props = [p1, p2];
+
+    bomber._nextSmokeAt = timeNow + 120 + Math.random() * 160;
+
+    bomber.hp = 90 + difficulty * 8;
+    // Occasional defensive tail gun.
+    bomber.nextShotAt = timeNow + 900 + Math.random() * 900;
+    bomber.shotEveryMs = Math.max(1400, 2200 - difficulty * 55);
+    bomber.isBomber = true;
+  }
+
   function damageEnemy(enemy, amount, { onKilled }) {
     enemy.hp -= amount;
     if (enemy.hp <= 0) {
@@ -69,11 +114,12 @@ export function createEnemies(scene) {
     enemies.children.iterate((e) => {
       if (!e) return;
 
-      const drift = Math.sin((time + e.y * 10) / 380) * 22;
+      const drift = e.isBomber ? Math.sin((time + e.y * 6) / 520) * 12 : Math.sin((time + e.y * 10) / 380) * 22;
       e.body.setVelocityY(drift);
 
       // Light bank + prop follow/spin.
-      e.setRotation(Phaser.Math.Clamp(e.body.velocity.y / 560, -0.16, 0.16));
+      const bank = e.isBomber ? 0.09 : 0.16;
+      e.setRotation(Phaser.Math.Clamp(e.body.velocity.y / 560, -bank, bank));
       if (e._prop) {
         const w = (e.displayWidth || e.width) || 1;
         const dir = e.flipX ? -1 : 1;
@@ -81,14 +127,25 @@ export function createEnemies(scene) {
         e._prop.y = e.y;
         e._prop.rotation = time * 0.05;
       }
+      if (Array.isArray(e._props)) {
+        const w = (e.displayWidth || e.width) || 1;
+        // Engine nacelles are forward on the wing; keep both props near the nose-side.
+        e._props[0].x = e.x + w * 0.10;
+        e._props[0].y = e.y + 3;
+        e._props[1].x = e.x + w * 0.24;
+        e._props[1].y = e.y + 4;
+        e._props[0].rotation = time * 0.05;
+        e._props[1].rotation = time * 0.05;
+      }
 
       if (e._shadow) {
         const groundY = scene.scale.height - 16;
         const h = Phaser.Math.Clamp((groundY - e.y) / 280, 0, 1);
-        e._shadow.x = e.x - 6;
+        e._shadow.x = e.x - (e.isBomber ? 10 : 6);
         e._shadow.y = groundY;
-        e._shadow.setAlpha(Phaser.Math.Clamp(0.36 - h * 0.36, 0, 0.36));
-        e._shadow.setScale(0.9 - h * 0.28);
+        const maxA = e.isBomber ? 0.30 : 0.36;
+        e._shadow.setAlpha(Phaser.Math.Clamp(maxA - h * maxA, 0, maxA));
+        e._shadow.setScale((e.isBomber ? 1.15 : 0.9) - h * (e.isBomber ? 0.34 : 0.28));
       }
 
       // Engine smoke.
@@ -169,6 +226,7 @@ export function createEnemies(scene) {
   return {
     enemies,
     spawnFighter,
+    spawnBomber,
     spawnFlak,
     updateEnemies,
     damageEnemy

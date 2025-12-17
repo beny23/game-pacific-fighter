@@ -205,6 +205,7 @@ export class GameScene extends Phaser.Scene {
       player: this.player,
       enemyBullets: this.weapons.enemyBullets,
       spawnFighter: (args) => this.enemySystem.spawnFighter(args),
+      spawnBomber: (args) => this.enemySystem.spawnBomber(args),
       spawnFlak: (x, y, ctx) => this.enemySystem.spawnFlak(x, y, ctx)
     });
 
