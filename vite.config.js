@@ -8,6 +8,13 @@ export default defineConfig({
     strictPort: true
   },
   build: {
-    target: 'es2020'
+    target: 'es2020',
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules/phaser')) return 'phaser';
+        }
+      }
+    }
   }
 });
