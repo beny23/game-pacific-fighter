@@ -27,6 +27,27 @@ export class PlayerSystem {
 
     this.cursors = null;
     this.keys = null;
+
+    this._callbacks = {
+      onFireCannon: null,
+      onDropBomb: null
+    };
+
+    this.pointerControl = {
+      activeId: null,
+      startY: 0,
+      startPlayerY: 0,
+      dragging: false,
+      moved: 0,
+      lastTapAt: 0,
+      tapMaxMove: 14,
+      swipeTargetY: null,
+      ignoreTap: false
+    };
+
+    this._onPointerDown = null;
+    this._onPointerMove = null;
+    this._onPointerUp = null;
   }
 
   create() {
@@ -64,6 +85,75 @@ export class PlayerSystem {
       b: Phaser.Input.Keyboard.KeyCodes.B
     });
 
+    // Pointer controls:
+    // - Touch: swipe up/down changes altitude; tap fires cannon; two-finger tap drops bomb.
+    // - Mouse (desktop "cursor method"): cursor Y steers altitude; click fires cannon.
+    this._onPointerDown = (pointer) => {
+      const now = this.scene.time.now;
+
+      // Two-finger tap to drop bomb (touch only).
+      const touches = pointer?.event?.touches;
+      if (pointer.pointerType === 'touch' && touches && touches.length >= 2) {
+        this._callbacks.onDropBomb?.(now);
+        this.pointerControl.ignoreTap = true;
+        return;
+      }
+
+      this.pointerControl.activeId = pointer.id;
+      this.pointerControl.startY = pointer.y;
+      this.pointerControl.startPlayerY = this.sprite?.y ?? 0;
+      this.pointerControl.dragging = false;
+      this.pointerControl.moved = 0;
+      this.pointerControl.swipeTargetY = null;
+      this.pointerControl.ignoreTap = false;
+    };
+
+    this._onPointerMove = (pointer) => {
+      if (this.pointerControl.activeId !== pointer.id) return;
+      if (pointer.pointerType !== 'touch') return;
+
+      const dy = pointer.y - this.pointerControl.startY;
+      this.pointerControl.moved = Math.max(this.pointerControl.moved, Math.abs(dy));
+      if (!this.pointerControl.dragging && this.pointerControl.moved > this.pointerControl.tapMaxMove) {
+        this.pointerControl.dragging = true;
+      }
+
+      if (this.pointerControl.dragging) {
+        this.pointerControl.swipeTargetY = this.pointerControl.startPlayerY + dy;
+      }
+    };
+
+    this._onPointerUp = (pointer) => {
+      if (this.pointerControl.activeId !== pointer.id) return;
+
+      const now = this.scene.time.now;
+
+      // Tap to fire (touch) / click to fire (mouse) if we didn't drag.
+      const isTap = !this.pointerControl.dragging && this.pointerControl.moved <= this.pointerControl.tapMaxMove;
+      if (isTap && !this.pointerControl.ignoreTap) {
+        // Small debounce to avoid double-trigger from odd pointer sequences.
+        if (now - this.pointerControl.lastTapAt > 60) {
+          this.pointerControl.lastTapAt = now;
+          this._callbacks.onFireCannon?.(now);
+        }
+      }
+
+      this.pointerControl.activeId = null;
+      this.pointerControl.dragging = false;
+      this.pointerControl.swipeTargetY = null;
+      this.pointerControl.ignoreTap = false;
+    };
+
+    this.scene.input.on('pointerdown', this._onPointerDown);
+    this.scene.input.on('pointermove', this._onPointerMove);
+    this.scene.input.on('pointerup', this._onPointerUp);
+
+    this.scene.events.once('shutdown', () => {
+      this.scene.input.off('pointerdown', this._onPointerDown);
+      this.scene.input.off('pointermove', this._onPointerMove);
+      this.scene.input.off('pointerup', this._onPointerUp);
+    });
+
     return this.sprite;
   }
 
@@ -78,6 +168,10 @@ export class PlayerSystem {
   }) {
     if (this.state.dead) return;
 
+    // Keep latest callbacks for pointer handlers.
+    this._callbacks.onFireCannon = onFireCannon;
+    this._callbacks.onDropBomb = onDropBomb;
+
     const body = this.sprite?.body;
     if (!body) return;
 
@@ -86,13 +180,43 @@ export class PlayerSystem {
     const left = this.cursors.left.isDown || this.keys.a.isDown;
     const right = this.cursors.right.isDown || this.keys.d.isDown;
 
-    const vy = (up ? -1 : 0) + (down ? 1 : 0);
+    const vyKeys = (up ? -1 : 0) + (down ? 1 : 0);
     const vx = (left ? -1 : 0) + (right ? 1 : 0);
 
     const targetX = TUNING.PLAYER.START_X + vx * TUNING.PLAYER.X_NUDGE;
     this.sprite.x = Phaser.Math.Linear(this.sprite.x, targetX, TUNING.PLAYER.X_SMOOTH * dt);
 
-    this.sprite.setVelocityY(vy * TUNING.PLAYER.Y_SPEED);
+    // Vertical control priority:
+    // 1) Touch swipe drag (mobile)
+    // 2) Keyboard (desktop)
+    // 3) Mouse cursor Y steering (desktop "cursor method")
+    const pointer = this.scene.input.activePointer;
+    const wantsTouchSwipe = pointer?.pointerType === 'touch' && this.pointerControl.dragging;
+
+    if (wantsTouchSwipe && this.pointerControl.swipeTargetY != null) {
+      const targetY = clamp(
+        this.pointerControl.swipeTargetY,
+        TUNING.PLAYER.MIN_Y,
+        this.scene.scale.height - TUNING.PLAYER.MIN_Y
+      );
+      const dy = targetY - this.sprite.y;
+      const vy = Phaser.Math.Clamp(dy * 9, -TUNING.PLAYER.Y_SPEED, TUNING.PLAYER.Y_SPEED);
+      this.sprite.setVelocityY(vy);
+    } else if (vyKeys !== 0) {
+      this.sprite.setVelocityY(vyKeys * TUNING.PLAYER.Y_SPEED);
+    } else if (pointer?.pointerType === 'mouse') {
+      // Cursor method: move toward cursor Y with a springy feel.
+      const targetY = clamp(
+        pointer.y,
+        TUNING.PLAYER.MIN_Y,
+        this.scene.scale.height - TUNING.PLAYER.MIN_Y
+      );
+      const dy = targetY - this.sprite.y;
+      const vy = Phaser.Math.Clamp(dy * 7, -TUNING.PLAYER.Y_SPEED, TUNING.PLAYER.Y_SPEED);
+      this.sprite.setVelocityY(vy);
+    } else {
+      this.sprite.setVelocityY(0);
+    }
 
     // Subtle bank animation based on vertical velocity.
     this.sprite.setRotation(Phaser.Math.Clamp(body.velocity.y / 520, -0.22, 0.22));
