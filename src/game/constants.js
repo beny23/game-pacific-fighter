@@ -31,6 +31,13 @@ export const TUNING = {
     FIGHTER_SPAWN_MIN_MS: 700
   },
 
+  BATTLESHIP: {
+    // Tuned so it reliably takes multiple bombs to sink.
+    HP: 360,
+    BOMB_DAMAGE: 140,
+    BULLET_DAMAGE: 4
+  },
+
   SEGMENTS: {
     LAUNCH_MS: 3500,
     OCEAN_MS: 12000,

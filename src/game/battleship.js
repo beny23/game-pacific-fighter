@@ -1,3 +1,5 @@
+import { TUNING } from './constants.js';
+
 export function createBattleshipSystem(scene, { oceanLineY }) {
   const state = {
     sprite: null,
@@ -32,7 +34,7 @@ export function createBattleshipSystem(scene, { oceanLineY }) {
     scene.physics.add.existing(state.sprite, true);
 
     // Tuned so it takes multiple bombs to sink.
-    state.maxHp = 420;
+    state.maxHp = TUNING.BATTLESHIP.HP;
     state.hp = state.maxHp;
     state.active = true;
 
@@ -94,11 +96,13 @@ export function createBattleshipSystem(scene, { oceanLineY }) {
     }
 
     // Light smoke when damaged.
-    if (state.hp < state.maxHp * 0.5 && Math.random() < 0.05) {
+    const hpPct = state.maxHp > 0 ? state.hp / state.maxHp : 1;
+    const smokeChance = hpPct < 0.2 ? 0.16 : hpPct < 0.5 ? 0.08 : 0;
+    if (smokeChance > 0 && Math.random() < smokeChance) {
       const smoke = scene.add.image(state.sprite.x + (Math.random() - 0.5) * 120, state.sprite.y - 18, 'pf_smoke');
       smoke.setDepth(state.sprite.depth + 1);
-      smoke.setAlpha(0.18);
-      smoke.setScale(0.5 + Math.random() * 0.4);
+      smoke.setAlpha(hpPct < 0.2 ? 0.28 : 0.20);
+      smoke.setScale((hpPct < 0.2 ? 0.65 : 0.52) + Math.random() * 0.42);
       smoke.setTint(0x062033);
       scene.tweens.add({
         targets: smoke,

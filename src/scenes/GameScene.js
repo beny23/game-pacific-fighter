@@ -200,19 +200,25 @@ export class GameScene extends Phaser.Scene {
 
     if (projectile?.destroy) projectile.destroy();
 
+    // Readable feedback on hit.
+    ship.setTintFill(0xffffff);
+    this.time.delayedCall(60, () => {
+      if (ship?.active) ship.clearTint();
+    });
+
     const x = this.battleshipSystem.sprite.x + (Math.random() - 0.5) * 40;
     const y = this.battleshipSystem.sprite.y - 10 + (Math.random() - 0.5) * 10;
 
     if (isBomb) {
       this._spawnExplosion(x, y);
-      const killed = this.battleshipSystem.damage(130);
+      const killed = this.battleshipSystem.damage(TUNING.BATTLESHIP.BOMB_DAMAGE);
       if (killed) {
         this.score += 900;
         this._spawnBigExplosion(x, y);
       }
     } else {
       this._spawnSpark(x, y);
-      const killed = this.battleshipSystem.damage(6);
+      const killed = this.battleshipSystem.damage(TUNING.BATTLESHIP.BULLET_DAMAGE);
       if (killed) {
         this.score += 900;
         this._spawnBigExplosion(x, y);
