@@ -36,12 +36,17 @@ export class PlayerSystem {
     this.pointerControl = {
       activeId: null,
       activeWasTouch: false,
+      downAt: 0,
       startY: 0,
       startPlayerY: 0,
       dragging: false,
       moved: 0,
       lastTapAt: 0,
-      tapMaxMove: 14,
+      tapMaxMove: 16,
+      tapMaxMs: 220,
+      longPressMs: 340,
+      longPressCall: null,
+      longPressFired: false,
       swipeTargetY: null,
       ignoreTap: false
     };
@@ -110,12 +115,27 @@ export class PlayerSystem {
 
       this.pointerControl.activeId = pointer.id;
       this.pointerControl.activeWasTouch = !!pointer?.wasTouch;
+      this.pointerControl.downAt = now;
       this.pointerControl.startY = this._pointerGameY(pointer);
       this.pointerControl.startPlayerY = this.sprite?.y ?? 0;
       this.pointerControl.dragging = false;
       this.pointerControl.moved = 0;
+      this.pointerControl.longPressFired = false;
       this.pointerControl.swipeTargetY = null;
       this.pointerControl.ignoreTap = false;
+
+      // Touch-only: long-press drops a bomb (prevents accidental fires while adjusting altitude).
+      if (this.pointerControl.activeWasTouch) {
+        if (this.pointerControl.longPressCall) this.pointerControl.longPressCall.remove(false);
+        this.pointerControl.longPressCall = this.scene.time.delayedCall(this.pointerControl.longPressMs, () => {
+          // Still the active pointer, and not dragging.
+          if (this.pointerControl.activeId !== pointer.id) return;
+          if (this.pointerControl.dragging) return;
+          this.pointerControl.longPressFired = true;
+          this.pointerControl.ignoreTap = true;
+          this._callbacks.onDropBomb?.(this.scene.time.now);
+        });
+      }
     };
 
     this._onPointerMove = (pointer) => {
@@ -127,6 +147,12 @@ export class PlayerSystem {
       this.pointerControl.moved = Math.max(this.pointerControl.moved, Math.abs(dy));
       if (!this.pointerControl.dragging && this.pointerControl.moved > this.pointerControl.tapMaxMove) {
         this.pointerControl.dragging = true;
+
+        // Cancel long-press bomb if the player starts swiping.
+        if (this.pointerControl.longPressCall) {
+          this.pointerControl.longPressCall.remove(false);
+          this.pointerControl.longPressCall = null;
+        }
       }
 
       if (this.pointerControl.dragging) {
@@ -139,9 +165,22 @@ export class PlayerSystem {
 
       const now = this.scene.time.now;
 
+      if (this.pointerControl.longPressCall) {
+        this.pointerControl.longPressCall.remove(false);
+        this.pointerControl.longPressCall = null;
+      }
+
       // Tap to fire (touch) / click to fire (mouse) if we didn't drag.
-      const isTap = !this.pointerControl.dragging && this.pointerControl.moved <= this.pointerControl.tapMaxMove;
-      if (isTap && !this.pointerControl.ignoreTap) {
+      const pressMs = now - (this.pointerControl.downAt || now);
+      const isTap =
+        !this.pointerControl.dragging &&
+        this.pointerControl.moved <= this.pointerControl.tapMaxMove &&
+        pressMs <= this.pointerControl.tapMaxMs;
+
+      // If long-press fired a bomb, do not also fire.
+      if (this.pointerControl.longPressFired) {
+        // no-op
+      } else if (isTap && !this.pointerControl.ignoreTap) {
         // Small debounce to avoid double-trigger from odd pointer sequences.
         if (now - this.pointerControl.lastTapAt > 60) {
           this.pointerControl.lastTapAt = now;
@@ -151,6 +190,7 @@ export class PlayerSystem {
 
       this.pointerControl.activeId = null;
       this.pointerControl.activeWasTouch = false;
+      this.pointerControl.downAt = 0;
       this.pointerControl.dragging = false;
       this.pointerControl.swipeTargetY = null;
       this.pointerControl.ignoreTap = false;
