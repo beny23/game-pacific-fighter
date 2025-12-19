@@ -22,13 +22,44 @@ export class SpawnDirector {
   }) {
     // Easier pacing: fewer fighters, slower ramp.
     const baseEvery = 2200;
-    const every = Math.max(1100, baseEvery - difficulty * 90);
+    const everyBase = Math.max(1100, baseEvery - difficulty * 90);
 
     if (!this.nextFighterAt) this.nextFighterAt = time + 900;
 
+    // Detect bomber presence so we can keep spawns readable.
+    let bomberY = null;
+    let bomberCount = 0;
+    enemies?.children?.iterate?.((e) => {
+      if (!e?.isBomber) return;
+      bomberCount += 1;
+      if (bomberY == null) bomberY = e.y;
+    });
+
+    const fighterEvery = bomberCount > 0 ? Math.floor(everyBase * 1.25) : everyBase;
+
     if (time >= this.nextFighterAt && segment !== SEGMENT.LAUNCH) {
-      this.nextFighterAt = time + every;
-      spawnFighter({ difficulty, width, height, timeNow: time });
+      this.nextFighterAt = time + fighterEvery;
+
+      let y = undefined;
+      if (bomberY != null) {
+        // Try to spawn fighters away from bomber altitude.
+        const minY = 60;
+        const maxY = Math.max(minY + 20, height - 120);
+        const gap = 120;
+        const topBandMax = Math.max(minY, bomberY - gap);
+        const botBandMin = Math.min(maxY, bomberY + gap);
+
+        const topSpace = Math.max(0, topBandMax - minY);
+        const botSpace = Math.max(0, maxY - botBandMin);
+
+        if (topSpace + botSpace > 0) {
+          const pickTop = Math.random() < (topSpace / (topSpace + botSpace));
+          if (pickTop && topSpace > 0) y = minY + Math.random() * topSpace;
+          else if (botSpace > 0) y = botBandMin + Math.random() * botSpace;
+        }
+      }
+
+      spawnFighter({ difficulty, width, height, timeNow: time, y });
     }
 
     // Bombers: same direction as the player (visually face right) but slower,
@@ -41,11 +72,6 @@ export class SpawnDirector {
       if (!this.nextBomberAt) this.nextBomberAt = time + 4200;
 
       if (time >= this.nextBomberAt) {
-        let bomberCount = 0;
-        enemies?.children?.iterate?.((e) => {
-          if (e?.isBomber) bomberCount += 1;
-        });
-
         // Keep bombers as a rare, readable threat.
         if (bomberCount < 1) {
           spawnBomber({ difficulty, width, height, timeNow: time, worldSpeed });

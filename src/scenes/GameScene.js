@@ -338,6 +338,42 @@ export class GameScene extends Phaser.Scene {
         }
       }
 
+      // Tracer trail for regular enemy bullets.
+      if (b.texture?.key === 'pf_enemy_bullet') {
+        if (!b._nextTracerAt) b._nextTracerAt = time + 35;
+        if (time >= b._nextTracerAt) {
+          b._nextTracerAt = time + 45;
+
+          const vx = b.body?.velocity?.x ?? -1;
+          const vy = b.body?.velocity?.y ?? 0;
+          const sp = Math.hypot(vx, vy) || 1;
+          const behindX = -vx / sp;
+          const behindY = -vy / sp;
+
+          const strong = !!b._tracerStrong;
+          const t = this.vfxPool.acquire('pf_enemy_bullet');
+          t.setPosition(b.x + behindX * 8, b.y + behindY * 8);
+          t.setDepth(2);
+          t.setAlpha(strong ? 0.28 : 0.18);
+          t.setScale(strong ? 0.95 : 0.85);
+          t.setRotation(Math.atan2(vy, vx));
+          t.setBlendMode(Phaser.BlendModes.ADD);
+          t.setTint(strong ? 0xffd166 : 0xff6b6b);
+
+          this.tweens.add({
+            targets: t,
+            x: t.x + behindX * (strong ? 22 : 16),
+            y: t.y + behindY * (strong ? 22 : 16),
+            alpha: 0,
+            scaleX: t.scaleX * 0.65,
+            scaleY: t.scaleY * 0.65,
+            duration: strong ? 220 : 180,
+            ease: 'Quad.easeOut',
+            onComplete: () => this.vfxPool.release(t)
+          });
+        }
+      }
+
       if (b.texture?.key !== 'pf_flak') return;
 
       if (!b._nextTrailAt) b._nextTrailAt = time + 60;
@@ -369,8 +405,9 @@ export class GameScene extends Phaser.Scene {
       this._spawnSpark(enemy.x, enemy.y);
       this.enemySystem.damageEnemy(enemy, 26, {
         onKilled: () => {
-          this._spawnExplosion(enemy.x, enemy.y);
-          this.score += 120;
+          const isBomber = !!enemy?.isBomber;
+          this._spawnExplosion(enemy.x, enemy.y, { scale: isBomber ? 1.45 : 1 });
+          this.score += isBomber ? 260 : 120;
         }
       });
     });
@@ -409,7 +446,9 @@ export class GameScene extends Phaser.Scene {
         onDamageEnemy: (e, amt) =>
           this.enemySystem.damageEnemy(e, amt, {
             onKilled: () => {
-              this.score += 120;
+              const isBomber = !!e?.isBomber;
+              if (isBomber) this._spawnExplosion(e.x, e.y, { scale: 1.55 });
+              this.score += isBomber ? 260 : 120;
             }
           }),
         onDamageGroundTarget: (t, amt) => this._damageGroundTarget(t, amt)
@@ -425,7 +464,9 @@ export class GameScene extends Phaser.Scene {
         onDamageEnemy: (e, amt) =>
           this.enemySystem.damageEnemy(e, amt, {
             onKilled: () => {
-              this.score += 120;
+              const isBomber = !!e?.isBomber;
+              if (isBomber) this._spawnExplosion(e.x, e.y, { scale: 1.55 });
+              this.score += isBomber ? 260 : 120;
             }
           }),
         onDamageGroundTarget: (t, amt) => this._damageGroundTarget(t, amt)
@@ -494,15 +535,16 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  _spawnExplosion(x, y) {
+  _spawnExplosion(x, y, { scale = 1 } = {}) {
     this.audio?.playExplosion?.(false);
-    this._flash(0.05, 110);
-    this.cameras.main.shake(70, 0.002);
+    const s = Math.max(0.6, scale);
+    this._flash(0.05 * Math.min(1.4, s), 110);
+    this.cameras.main.shake(70, 0.002 * Math.min(2.0, s));
 
     const burn = this.add.image(x, y + 6, 'pf_burn');
     burn.setDepth(-5);
     burn.setAlpha(0.22);
-    burn.setScale(0.9 + Math.random() * 0.6);
+    burn.setScale((0.9 + Math.random() * 0.6) * (0.9 + s * 0.3));
     burn.setRotation(Math.random() * Math.PI);
     this.tweens.add({
       targets: burn,
@@ -515,12 +557,12 @@ export class GameScene extends Phaser.Scene {
     const puff = this.add.image(x, y, 'pf_explosion');
     puff.setDepth(55);
     puff.setAlpha(0.9);
-    puff.setScale(0.7);
+    puff.setScale(0.7 * (0.85 + s * 0.25));
     puff.setBlendMode(Phaser.BlendModes.SCREEN);
     this.tweens.add({
       targets: puff,
       alpha: 0,
-      scale: 1.3,
+      scale: 1.3 * (0.85 + s * 0.25),
       duration: 260,
       ease: 'Quad.easeOut',
       onComplete: () => puff.destroy()

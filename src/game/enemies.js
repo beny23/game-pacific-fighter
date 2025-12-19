@@ -20,8 +20,8 @@ export function createEnemies(scene) {
     enemy.destroy();
   }
 
-  function spawnFighter({ difficulty, width, height, timeNow }) {
-    const y = 60 + Math.random() * (height - 180);
+  function spawnFighter({ difficulty, width, height, timeNow, y: yOverride }) {
+    const y = typeof yOverride === 'number' ? yOverride : 60 + Math.random() * (height - 180);
     const enemy = enemies.create(width + 50, y, 'pf_fighter');
     // Match player plane size (player uses pf_plane at ~1.0 scale).
     enemy.setScale(1.05);
@@ -152,19 +152,36 @@ export function createEnemies(scene) {
       if (time >= (e._nextSmokeAt || 0)) {
         e._nextSmokeAt = time + 95 + Math.random() * 90;
         const w = (e.displayWidth || e.width) || 1;
-        const smoke = scene.add.image(e.x + w * 0.45, e.y + 2, 'pf_smoke');
-        smoke.setDepth(e.depth - 1);
-        smoke.setAlpha(0.12);
-        smoke.setScale(0.28 + Math.random() * 0.18);
-        scene.tweens.add({
-          targets: smoke,
-          x: smoke.x + 22,
-          y: smoke.y + (Math.random() - 0.5) * 10,
-          alpha: 0,
-          scale: smoke.scaleX * 1.65,
-          duration: 520,
-          onComplete: () => smoke.destroy()
-        });
+        // Emit smoke behind the plane based on facing direction.
+        // Fighters are flipped (face left), bombers face right.
+        const behindDir = e.flipX ? 1 : -1;
+
+        const spawnSmoke = (sx, sy, { alpha = 0.12, drift = 22 } = {}) => {
+          const smoke = scene.add.image(sx, sy, 'pf_smoke');
+          smoke.setDepth(e.depth - 1);
+          smoke.setAlpha(alpha);
+          smoke.setScale(0.26 + Math.random() * 0.20);
+          scene.tweens.add({
+            targets: smoke,
+            x: smoke.x + behindDir * drift,
+            y: smoke.y + (Math.random() - 0.5) * 10,
+            alpha: 0,
+            scale: smoke.scaleX * 1.7,
+            duration: 560,
+            onComplete: () => smoke.destroy()
+          });
+        };
+
+        if (e.isBomber) {
+          // Twin-engine smoke, roughly aligned with the prop/nacelles.
+          const baseY = e.y + 3;
+          const e1x = e.x + w * 0.10 + behindDir * 6;
+          const e2x = e.x + w * 0.24 + behindDir * 6;
+          spawnSmoke(e1x, baseY + 1, { alpha: 0.10, drift: 28 });
+          spawnSmoke(e2x, baseY + 2, { alpha: 0.10, drift: 28 });
+        } else {
+          spawnSmoke(e.x + behindDir * w * 0.45, e.y + 2, { alpha: 0.12, drift: 22 });
+        }
       }
 
       if (time >= e.nextShotAt) {
@@ -196,6 +213,9 @@ export function createEnemies(scene) {
     const bullet = enemyBullets.create(enemy.x - w * 0.42, enemy.y, 'pf_enemy_bullet');
     bullet.body.setAllowGravity(false);
     const speed = 300 + difficulty * 6;
+
+    // Slightly stronger tracer for bomber defensive fire.
+    bullet._tracerStrong = !!enemy?.isBomber;
 
     // Straight shot (classic arcade feel): always fire left.
     bullet.setVelocity(-speed, 0);
