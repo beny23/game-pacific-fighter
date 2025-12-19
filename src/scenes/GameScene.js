@@ -399,7 +399,17 @@ export class GameScene extends Phaser.Scene {
   }
 
   _wireCollisions() {
-    // Player bullets vs fighters
+    this._wirePlayerBulletsVsEnemies();
+    this._wireEnemyBulletsVsPlayer();
+    this._wireEnemyVsPlayer();
+    this._wireBombsVsGround();
+    this._wireBombsVsGroundTargets();
+    this._wirePlayerBulletsVsGroundTargets();
+    this._wireBombsVsOceanTargets();
+    this._wirePlayerBulletsVsOceanTargets();
+  }
+
+  _wirePlayerBulletsVsEnemies() {
     this.physics.add.overlap(this.weapons.playerBullets, this.enemySystem.enemies, (bullet, enemy) => {
       bullet.destroy();
       this._spawnSpark(enemy.x, enemy.y);
@@ -411,8 +421,9 @@ export class GameScene extends Phaser.Scene {
         }
       });
     });
+  }
 
-    // Enemy bullets vs player
+  _wireEnemyBulletsVsPlayer() {
     this.physics.add.overlap(this.weapons.enemyBullets, this.player, (a, b) => {
       const bullet = a === this.player ? b : a;
       if (bullet && bullet !== this.player) bullet.destroy();
@@ -423,14 +434,16 @@ export class GameScene extends Phaser.Scene {
       }
       this.playerSystem.damage(6);
     });
+  }
 
-    // Fighter collision vs player
+  _wireEnemyVsPlayer() {
     this.physics.add.overlap(this.enemySystem.enemies, this.player, () => {
       this._spawnSpark(this.player.x, this.player.y);
       this.playerSystem.damage(16);
     });
+  }
 
-    // Bombs vs ground
+  _wireBombsVsGround() {
     this.physics.add.collider(this.weapons.bombs, this.groundProxy, (bomb) => {
       const isOceanImpact = !this.segmentSystem.island && bomb.y >= this.oceanLineY - 8;
 
@@ -455,8 +468,9 @@ export class GameScene extends Phaser.Scene {
       });
       bomb.destroy();
     });
+  }
 
-    // Bombs vs ground targets
+  _wireBombsVsGroundTargets() {
     this.physics.add.overlap(this.weapons.bombs, this.groundTargets, (bomb, target) => {
       this.weapons.explodeBomb(bomb.x, bomb.y, {
         enemies: this.enemySystem.enemies,
@@ -474,22 +488,25 @@ export class GameScene extends Phaser.Scene {
       bomb.destroy();
       this._damageGroundTarget(target, 999);
     });
+  }
 
-    // Player bullets vs ground targets
+  _wirePlayerBulletsVsGroundTargets() {
     this.physics.add.overlap(this.weapons.playerBullets, this.groundTargets, (bullet, target) => {
       bullet.destroy();
       this._damageGroundTarget(target, 6);
     });
+  }
 
-    // Bombs vs ocean targets (convoy)
+  _wireBombsVsOceanTargets() {
     this.physics.add.overlap(this.weapons.bombs, this.oceanTargets, (bomb, target) => {
       this._spawnExplosion(target.x, target.y);
       bomb.destroy();
       target.destroy();
       this.score += 90;
     });
+  }
 
-    // Bullets vs ocean targets (chip)
+  _wirePlayerBulletsVsOceanTargets() {
     this.physics.add.overlap(this.weapons.playerBullets, this.oceanTargets, (bullet, target) => {
       bullet.destroy();
       const killed = this.convoySystem.damage(target, 6);
